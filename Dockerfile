@@ -8,26 +8,16 @@ FROM alpine:3.19 AS builder
 # - build-base: zestaw narzędzi do kompilacji (zawiera m.in. g++)
 # - wget: narzędzie do pobierania plików z internetu (użyte do pobrania biblioteki)
 # - upx: Ultimate Packer for eXecutables (zaawansowany kompresor plików binarnych) (usuniety z powodu problemów z budowaniem obrazu na arm64)
-# - git oraz openssh-cliend: pobieranie kodu z GitHuba
-RUN apk add --no-cache build-base wget git openssh-client
+RUN apk add --no-cache build-base wget
 
 # Ustawienie katalogu roboczego na czas budowania
 WORKDIR /build
 
-# Konfiguracja SSH pod GitHub
-RUN mkdir -p -m 0700 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
-
-#Pobranie kodu z githuba do kontenera
-ARG GIT_BRANCH=main
-#  skolonowanie samej struktury folderów, bez pobierania plików (--filter=blob:none --no-checkout)
-RUN --mount=type=ssh git clone --filter=blob:none --no-checkout -b ${GIT_BRANCH} git@github.com:PatrycjaSputo/programowanie_aplikacji_w_chmurze_obliczeniowej_lab.git . \
-    # ustawienie filtru tylkona folder
-    && git sparse-checkout set ZADANIE_1 \
-    # pobranie tylko tego, co jest w filtrze
-    && git checkout
+# Kopiujemy kod źródłowy z GitHuba (dostarczony przez akcję checkout) prosto do kontenera
+COPY src/ ./src/
 
 # Pobranie biblioteki do serwera HTTP (Release v0.43.3)
-RUN wget -O ZADANIE_1/src/httplib.h https://raw.githubusercontent.com/yhirose/cpp-httplib/ec5ce17929c56c8bb7f0307ce2af496bd017a3c9/httplib.h
+RUN wget -O src/httplib.h https://raw.githubusercontent.com/yhirose/cpp-httplib/ec5ce17929c56c8bb7f0307ce2af496bd017a3c9/httplib.h
 
 
 # Kompilacja i optymalizacja kodu w C++:
@@ -38,7 +28,7 @@ RUN wget -O ZADANIE_1/src/httplib.h https://raw.githubusercontent.com/yhirose/cp
 # -pthread : Włączenie obsługi wielowątkowości (wiele użytkowników na raz)
 # && strip server : Usunięcie symboli debugowania z pliku (usuwa nazwy, wszystko jest zapisywane jak najkrócej)
 # && upx --best --lzma server : program kompresujący z algorytmem lzma
-RUN g++ -Os -static -flto -ffunction-sections -fdata-sections -Wl,--gc-sections ZADANIE_1/src/main.cpp -o server -pthread \
+RUN g++ -Os -static -flto -ffunction-sections -fdata-sections -Wl,--gc-sections src/main.cpp -o server -pthread \
     && strip server 
 # usunięcie upx z powodu problemów z budowaniem wieloarchitekturowym
 #    && upx --best --lzma server
@@ -50,7 +40,7 @@ FROM scratch
 
 # Metadane obrazu (dobre praktyki)
 LABEL org.opencontainers.image.authors="Patrycja Sputo" \
-      org.opencontainers.image.title="Zaliczenie 1"
+      org.opencontainers.image.title="Zadanie 2"
 
 
 # Deklaracja domyślnego portu jako zmiennej (żeby potem dostać się do niej w C++)
@@ -58,7 +48,7 @@ ENV APP_PORT=3000
 
 # Skopiowanie gotowego, skompresowanego pliku binarnego z pierwszego etapu (buildera).
 COPY --from=builder /build/server /server
-COPY --from=builder /build/ZADANIE_1/web /web/
+COPY web/ /web/
 
 # Zmiana usera
 USER 1000:1000
