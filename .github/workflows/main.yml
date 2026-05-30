@@ -55,7 +55,7 @@ jobs:
           context: .
           load: true
           tags: test-image:local
-          cache-from: type=registry,ref=${{ vars.DOCKERHUB_USERNAME }}/lab-cache:buildcache
+          cache-from: type=registry,ref=${{ vars.DOCKERHUB_USERNAME }}/${{ vars.DOCKERHUB_REPO }}:buildcache
 
       - name: Analiza podatności obrazu (Trivy)
         uses: aquasecurity/trivy-action@v0.36.0
@@ -75,5 +75,5 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ vars.DOCKERHUB_USERNAME }}/lab-cache:buildcache
-          cache-to: type=registry,ref=${{ vars.DOCKERHUB_USERNAME }}/lab-cache:buildcache,mode=max
+          cache-from: type=registry,ref=${{ vars.DOCKERHUB_USERNAME }}/${{ vars.DOCKERHUB_REPO }}:buildcache
+          cache-to: type=registry,ref=${{ vars.DOCKERHUB_USERNAME }}/${{ vars.DOCKERHUB_REPO }}:buildcache,mode=max
