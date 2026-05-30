@@ -1,0 +1,79 @@
+name: Pipeline
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - '*'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  proces_budowania_i_skanowania:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Pobranie repozytorium
+        uses: actions/checkout@v6
+
+      - name: Konfiguracja emulatora
+        uses: docker/setup-qemu-action@v4.1.0
+
+      - name: Inicjalizacja Docker Buildx
+        uses: docker/setup-buildx-action@v4.1.0
+
+      - name: Autoryzacja w DockerHub
+        uses: docker/login-action@v4.2.0
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Autoryzacja w GHCR
+        uses: docker/login-action@v4.2.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generowanie tagów dla obrazu
+        id: meta
+        uses: docker/metadata-action@v6.1.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,format=short
+            type=semver,pattern={{version}}
+
+      - name: Budowa obrazu testowego dla skanera (amd64)
+        uses: docker/build-push-action@v7.2.0
+        with:
+          context: .
+          load: true
+          tags: test-image:local
+          cache-from: type=registry,ref=${{ vars.DOCKERHUB_USERNAME }}/lab-cache:buildcache
+
+      - name: Analiza podatności obrazu (Trivy)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: 'test-image:local'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Budowa i Push
+        uses: docker/build-push-action@v7.2.0
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ vars.DOCKERHUB_USERNAME }}/lab-cache:buildcache
+          cache-to: type=registry,ref=${{ vars.DOCKERHUB_USERNAME }}/lab-cache:buildcache,mode=max
